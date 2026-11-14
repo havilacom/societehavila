@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://havilacom.github.io/societe-havila/sitemap.xml
