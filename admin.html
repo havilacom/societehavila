@@ -33,8 +33,13 @@ async function convertToWebP(file){
 }
 function storagePathFromUrl(url,bucket){
   if(!url||typeof url!=="string") return null;
-  const marker="/"+bucket+"/";const i=url.indexOf(marker);if(i<0) return null;
-  try{return decodeURIComponent(url.slice(i+marker.length).split("?")[0]);}catch(e){return url.slice(i+marker.length).split("?")[0];}
+  let u=url;
+  // URL wsrv : https://wsrv.nl/?url=<url-encodee-de-la-vraie-photo>&output=webp -> on récupère la vraie URL
+  if(u.includes("wsrv.nl")){
+    try{ const q=new URL(u).searchParams.get("url"); if(q) u=decodeURIComponent(q); }catch(e){}
+  }
+  const marker="/"+bucket+"/";const i=u.indexOf(marker);if(i<0) return null;
+  try{return decodeURIComponent(u.slice(i+marker.length).split("?")[0]);}catch(e){return u.slice(i+marker.length).split("?")[0];}
 }
 async function deleteStorageForRow(row){
   if(!row) return;
@@ -46,7 +51,7 @@ async function deleteStorageForRow(row){
 }
 
 function editRow(r){openForm(r)}
-async function saveRow(id){try{let up=null;const f=document.getElementById("nf_file");if(f&&f.files[0]){let file=f.files[0];file=await convertToWebP(file);const path=Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9.-]/g,"_");const {error}=await sb.storage.from("havila-media").upload(path,file,{contentType:file.type||"image/webp"});if(error)throw error;up=sb.storage.from("havila-media").getPublicUrl(path).data.publicUrl}
+async function saveRow(id){try{let up=null;const f=document.getElementById("nf_file");if(f&&f.files[0]){let file=f.files[0];const origType=file.type;file=await convertToWebP(file);const converted=file.type==="image/webp"&&origType!=="image/webp";const path=Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9.-]/g,"_");const {error}=await sb.storage.from("havila-media").upload(path,file,{contentType:file.type||"image/webp"});if(error)throw error;up=sb.storage.from("havila-media").getPublicUrl(path).data.publicUrl;if(!converted&&origType!=="image/webp"){up="https://wsrv.nl/?url="+encodeURIComponent(up)+"&output=webp";}alert(converted?"Photo convertie en WebP ✅":"Photo envoyée en "+(origType||"JPG")+" — affichée en WebP via conversion en ligne ✅");
 const o={};fieldsFor(current).forEach(x=>{const k=x.split("|")[0];o[k]=document.getElementById("nf_"+k).value});if(up){o[current==="team_members"?"photo_url":current==="partners"?"logo_url":"image_url"]=up}o.is_published=document.getElementById("nf_is_published").value==="true"; if(document.getElementById("nf_is_illustration")) o.is_illustration=document.getElementById("nf_is_illustration").value==="true";const res=id?await sb.from(current).update(o).eq("id",id):await sb.from(current).insert([o]);if(res.error)throw res.error;alert("Enregistre - visible sur le site public.");load()}catch(e){alert("Erreur: "+e.message)}}
 async function delRow(id){if(!confirm("Supprimer ? La photo associée sera aussi supprimée dans Storage."))return;try{const {data:row}=await sb.from(current).select("*").eq("id",id).maybeSingle();await deleteStorageForRow(row);}catch(e){console.warn("Suppression Storage:",e.message)}await sb.from(current).delete().eq("id",id);load()}
 async function setStatus(id,v){await sb.from(current).update({status:v}).eq("id",id)}
