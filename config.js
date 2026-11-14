@@ -1,13 +1,4 @@
-// ============================================================
-// HAVILA — Configuration Supabase (CLE PUBLIQUE UNIQUEMENT)
-// JAMAIS de clé service_role ici. C'est du code public.
-// 1. Crée ton projet sur https://supabase.com/dashboard
-// 2. Copie Project URL + anon public key dans Settings > API
-// 3. Colle-les ci-dessous, puis déploie.
-// ============================================================
 window.HAVILA_CONFIG = {
-  SUPABASE_URL: "https://VOTRE-PROJET.supabase.co",
-  SUPABASE_ANON_KEY: "VOTRE_CLE_ANON_PUBLIQUE",
-  // Si tu laisses les valeurs par défaut, le site utilise les contenus
-  // intégrés (fallback) : le site reste beau et fonctionnel sans Supabase.
+  SUPABASE_URL: "https://szhncxtublgouqoswtqx.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN6aG5jeHR1Ymxnb3Vxb3N3dHF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ2Mzk1MzksImV4cCI6MjExMDIxNTUzOX0.pCTnnqcJodrsmYisJ_ByRtjMSG8us5lWyyT3TZwhOHM",
 };
