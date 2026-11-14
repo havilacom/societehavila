@@ -17,10 +17,39 @@ const ro=(current==="contact_messages"||current==="applications");let h=`<div cl
 h+=`<div class="grid" style="margin-top:14px">${data.map(r=>`<div class="item">${r.image_url||r.photo_url||r.logo_url?`<img src="${r.image_url||r.photo_url||r.logo_url}">`:""}<b>${r.title||r.full_name||r.name||"-"}</b><p class="muted">${(r.excerpt||r.description||r.message||r.motivation||r.role||"").slice(0,140)}</p><p class="muted">${r.status||""} - ${r.is_published===false?"Brouillon":"Publie"}</p>${r.cv_url?`<a href="${r.cv_url}" target="_blank">Voir CV</a><br>`:""}<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">${!ro?`<button class="btn-ghost" style="padding:8px 12px;border-radius:999px;border:0;font-weight:700" onclick='editRow(${JSON.stringify(r)})'>Modifier</button><button class="btn-danger" style="padding:8px 12px;border-radius:999px;border:0;font-weight:700" onclick="delRow('${r.id}')">Supprimer</button>`:""}${ro?`<select onchange="setStatus('${r.id}',this.value)"><option>Nouveau</option><option>En cours</option><option>Traite</option></select>`:""}</div></div>`).join("")}</div></div>`;p.innerHTML=h}
 function fieldsFor(t){const m={news:["title|Titre","excerpt|Resume","content|Contenu","image_url|URL image","category|Categorie"],projects:["title|Titre","category|Categorie (Construction / Agriculture / Formation / Autres secteurs)","description|Description","image_url|URL image","location|Lieu","date|Date (si fournie, sinon laisser vide)","is_illustration|Illustration IA provisoire ? (true = oui, false = photo réelle)"],departments:["title|Titre","category|Categorie","description|Description","image_url|URL image"],team_members:["full_name|Nom complet","role|Fonction","department|Departement","bio|Biographie","photo_url|URL photo"],partners:["name|Nom","website|Site web","logo_url|URL logo","description|Description"],opportunities:["title|Titre","type|Type","location|Lieu","description|Description"]};return m[t]||[]}
 function openForm(r){const b=document.getElementById("formBox");r=r||{};b.innerHTML=`<div class="card" style="background:#F6F7FB">${fieldsFor(current).map(f=>{const [k,l]=f.split("|");return `<label>${l}<input id="nf_${k}" value="${(r[k]||"").toString().replace(/"/g,"")}"></label>`}).join("")}<label>Publier ? <select id="nf_is_published"><option value="true">Oui</option><option value="false">Non - brouillon</option></select></label><label>Image (upload Storage havila-media)<input type="file" id="nf_file" accept="image/*"></label><button class="btn btn-gold" onclick="saveRow('${r.id||""}')" style="margin-top:10px">Enregistrer</button></div>`}
+
+async function convertToWebP(file){
+  if(!file.type.startsWith("image/")||file.type==="image/webp"||file.type==="image/svg+xml"||file.type==="image/gif") return file;
+  try{
+    const bmp=await createImageBitmap(file);
+    const canvas=document.createElement("canvas"); canvas.width=bmp.width; canvas.height=bmp.height;
+    canvas.getContext("2d").drawImage(bmp,0,0);
+    const blob=await new Promise(res=>canvas.toBlob(res,"image/webp",0.82));
+    if(!blob) return file;
+    const base=file.name.replace(/\.[^.]+$/,"").replace(/[^a-zA-Z0-9-_]/g,"_");
+    return new File([blob], base+".webp", {type:"image/webp"});
+  }catch(e){ console.warn("Conversion WebP impossible, fichier d'origine conservé", e); return file; }
+}
+function storagePathFromUrl(url,bucket){
+  if(!url||typeof url!=="string") return null;
+  const marker="/"+bucket+"/";
+  const i=url.indexOf(marker); if(i<0) return null;
+  try{ return decodeURIComponent(url.slice(i+marker.length).split("?")[0]); }catch(e){ return url.slice(i+marker.length).split("?")[0]; }
+}
+async function deleteStorageForRow(row){
+  if(!row) return;
+  const buckets=[["havila-media",["image_url","logo_url","photo_url"]],["havila-cv",["cv_url"]]];
+  for(const [bucket,keys] of buckets){
+    const paths=[];
+    keys.forEach(k=>{ const pth=storagePathFromUrl(row[k],bucket); if(pth) paths.push(pth); });
+    if(paths.length){ const {error}=await sb.storage.from(bucket).remove(paths); if(error) console.warn("Suppression Storage:", error.message); }
+  }
+}
+
 function editRow(r){openForm(r)}
-async function saveRow(id){try{let up=null;const f=document.getElementById("nf_file");if(f&&f.files[0]){const file=f.files[0];const path=Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9.-]/g,"_");const {error}=await sb.storage.from("havila-media").upload(path,file);if(error)throw error;up=sb.storage.from("havila-media").getPublicUrl(path).data.publicUrl}
+async function saveRow(id){try{let up=null;const f=document.getElementById("nf_file");if(f&&f.files[0]){let file=f.files[0];file=await convertToWebP(file);const path=Date.now()+"-"+file.name.replace(/[^a-zA-Z0-9.-]/g,"_");const {error}=await sb.storage.from("havila-media").upload(path,file,{contentType:file.type||"image/webp"});if(error)throw error;up=sb.storage.from("havila-media").getPublicUrl(path).data.publicUrl}
 const o={};fieldsFor(current).forEach(x=>{const k=x.split("|")[0];o[k]=document.getElementById("nf_"+k).value});if(up){o[current==="team_members"?"photo_url":current==="partners"?"logo_url":"image_url"]=up}o.is_published=document.getElementById("nf_is_published").value==="true"; if(document.getElementById("nf_is_illustration")) o.is_illustration=document.getElementById("nf_is_illustration").value==="true";const res=id?await sb.from(current).update(o).eq("id",id):await sb.from(current).insert([o]);if(res.error)throw res.error;alert("Enregistre - visible sur le site public.");load()}catch(e){alert("Erreur: "+e.message)}}
-async function delRow(id){if(!confirm("Supprimer ?"))return;await sb.from(current).delete().eq("id",id);load()}
+async function delRow(id){if(!confirm("Supprimer ? La photo associée sera aussi supprimée dans Storage."))return;try{const {data:row}=await sb.from(current).select("*").eq("id",id).maybeSingle();await deleteStorageForRow(row);}catch(e){console.warn("Suppression Storage:",e.message)}await sb.from(current).delete().eq("id",id);load()}
 async function setStatus(id,v){await sb.from(current).update({status:v}).eq("id",id)}
 async function saveSettings(){const o={};["company_name","slogan","phone","email","city","province","about_text","vision_text","mission_text","dg_message"].forEach(k=>o[k]=document.getElementById("f_"+k).value);const {error}=await sb.from("site_settings").update(o).eq("id",1);if(error)alert(error.message);else alert("Enregistre - site public mis a jour.")}
 document.getElementById("loginBtn").onclick=async()=>{const {data,error}=await sb.auth.signInWithPassword({email:document.getElementById("loginEmail").value,password:document.getElementById("loginPass").value});if(error){document.getElementById("loginMsg").textContent=error.message;return}showDash(data.user)};
